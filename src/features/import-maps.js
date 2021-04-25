@@ -1,9 +1,14 @@
 /*
  * SystemJS browser attachments for script and import map processing
  */
-import { baseUrl, resolveAndComposeImportMap, hasDocument, resolveUrl } from '../common.js';
-import { systemJSPrototype } from '../system-core.js';
-import { errMsg } from '../err-msg.js';
+import {
+  baseUrl,
+  resolveAndComposeImportMap,
+  hasDocument,
+  resolveUrl
+} from "../common.js";
+import { systemJSPrototype } from "../system-core.js";
+import { errMsg } from "../err-msg.js";
 
 var importMapPromise = Promise.resolve();
 export var importMap = { imports: {}, scopes: {}, depcache: {}, integrity: {} };
@@ -21,55 +26,96 @@ systemJSPrototype.prepareImport = function (doProcessScripts) {
 };
 if (hasDocument) {
   processScripts();
-  window.addEventListener('DOMContentLoaded', processScripts);
+  window.addEventListener("DOMContentLoaded", processScripts);
 }
 
-function processScripts () {
-  [].forEach.call(document.querySelectorAll('script'), function (script) {
-    if (script.sp) // sp marker = systemjs processed
+function processScripts() {
+  [].forEach.call(document.querySelectorAll("script"), function (script) {
+    if (script.sp)
+      // sp marker = systemjs processed
       return;
     // TODO: deprecate systemjs-module in next major now that we have auto import
-    if (script.type === 'systemjs-module') {
+    // REVIEW <script type="systemjs-module" src="bundle.js" />
+    if (script.type === "systemjs-module") {
       script.sp = true;
-      if (!script.src)
-        return;
-      System.import(script.src.slice(0, 7) === 'import:' ? script.src.slice(7) : resolveUrl(script.src, baseUrl)).catch(function (e) {
+      if (!script.src) return;
+      System.import(
+        script.src.slice(0, 7) === "import:"
+          ? script.src.slice(7)
+          : resolveUrl(script.src, baseUrl)
+      ).catch(function (e) {
         // if there is a script load error, dispatch an "error" event
         // on the script tag.
-        if (e.message.indexOf('https://git.io/JvFET#3') > -1) {
-          var event = document.createEvent('Event');
-          event.initEvent('error', false, false);
+        if (e.message.indexOf("https://git.io/JvFET#3") > -1) {
+          var event = document.createEvent("Event");
+          event.initEvent("error", false, false);
           script.dispatchEvent(event);
         }
         return Promise.reject(e);
       });
-    }
-    else if (script.type === 'systemjs-importmap') {
+    } else if (script.type === "systemjs-importmap") {
+      // REVIEW <script type="systemjs-importmap">{"imports": {}}</script>
       script.sp = true;
-      var fetchPromise = script.src ? fetch(script.src, { integrity: script.integrity }).then(function (res) {
-        if (!res.ok)
-          throw Error(process.env.SYSTEM_PRODUCTION ? res.status : 'Invalid status code: ' + res.status);
-        return res.text();
-      }).catch(function (err) {
-        err.message = errMsg('W4', process.env.SYSTEM_PRODUCTION ? script.src : 'Error fetching systemjs-import map ' + script.src) + '\n' + err.message;
-        console.warn(err);
-        return '{}';
-      }) : script.innerHTML;
-      importMapPromise = importMapPromise.then(function () {
-        return fetchPromise;
-      }).then(function (text) {
-        extendImportMap(importMap, text, script.src || baseUrl);
-      });
+      var fetchPromise = script.src
+        ? // 如果为链接，获取链接的源数据
+          fetch(script.src, { integrity: script.integrity })
+            .then(function (res) {
+              if (!res.ok)
+                throw Error(
+                  process.env.SYSTEM_PRODUCTION
+                    ? res.status
+                    : "Invalid status code: " + res.status
+                );
+              return res.text();
+            })
+            .catch(function (err) {
+              err.message =
+                errMsg(
+                  "W4",
+                  process.env.SYSTEM_PRODUCTION
+                    ? script.src
+                    : "Error fetching systemjs-import map " + script.src
+                ) +
+                "\n" +
+                err.message;
+              console.warn(err);
+              return "{}";
+            })
+        : // 获取本地配置
+          script.innerHTML;
+      importMapPromise = importMapPromise
+        .then(function () {
+          return fetchPromise;
+        })
+        .then(function (text) {
+          extendImportMap(importMap, text, script.src || baseUrl);
+        });
     }
   });
 }
 
-function extendImportMap (importMap, newMapText, newMapUrl) {
+// REVIEW
+/**
+ * importMap 空的importMap对象
+ * newMapText 获取的importMap对象字符串
+ * baseUrl
+ */
+function extendImportMap(importMap, newMapText, newMapUrl) {
   var newMap = {};
   try {
     newMap = JSON.parse(newMapText);
   } catch (err) {
-    console.warn(Error((process.env.SYSTEM_PRODUCTION ? errMsg('W5') : errMsg('W5', "systemjs-importmap contains invalid JSON") + '\n\n' + newMapText + '\n' )));
+    console.warn(
+      Error(
+        process.env.SYSTEM_PRODUCTION
+          ? errMsg("W5")
+          : errMsg("W5", "systemjs-importmap contains invalid JSON") +
+              "\n\n" +
+              newMapText +
+              "\n"
+      )
+    );
   }
+  // newMap 为获取到的信息源
   resolveAndComposeImportMap(newMap, newMapUrl, importMap);
 }
